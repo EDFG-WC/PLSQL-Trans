@@ -1,0 +1,13 @@
+data/
+output/
+plsql_crawler/.scrapy/
+plsql-translator-java/target/
+__pycache__/
+*.pyc
+*.pyo
+.class
+.DS_Store
+*.swp
+*.swo
+.idea/
+.vscode/
