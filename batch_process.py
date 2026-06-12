@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
-批量处理：遍历爬取到的 PL/SQL 文件，生成 Java 源码和 drawio 图。
+批量处理：遍历爬取到的 PL/SQL 文件，生成 Java 源码和 Graphviz DOT 图。
 
 用法:
   python3 batch_process.py                              全部处理
   python3 batch_process.py --categories PROCEDURE       只处理 PROCEDURE
   python3 batch_process.py --max 100                    只处理前 100 个
   python3 batch_process.py --mode java                  只生成 Java
-  python3 batch_process.py --mode drawio                只生成 ANTLR 语法树图
-  python3 batch_process.py --mode flowchart             只生成方法流程图
+  python3 batch_process.py --mode graphviz              只生成 ANTLR 语法树 DOT 图
+  python3 batch_process.py --mode flow-graphviz         只生成控制流 DOT 图
   python3 batch_process.py --mode both                  生成所有（默认）
 """
 
@@ -22,8 +22,8 @@ from pathlib import Path
 PROJECT_DIR = Path(__file__).parent.resolve()
 DATA_DIR = PROJECT_DIR / "data"
 JAVA_DIR = PROJECT_DIR / "output" / "java"
-DRAWIO_DIR = PROJECT_DIR / "output" / "drawio"
-FLOW_DIR = PROJECT_DIR / "output" / "flowchart"
+GRAPHVIZ_DIR = PROJECT_DIR / "output" / "graphviz"
+FLOW_DIR = PROJECT_DIR / "output" / "flow-graphviz"
 JAR = PROJECT_DIR / "plsql-translator-java" / "target" / "plsql-translator.jar"
 ANTLR = PROJECT_DIR / "plsql-translator-java" / "lib" / "antlr-4.9.3-complete.jar"
 
@@ -72,25 +72,25 @@ def find_plsql_files(categories=None, max_files=None):
 
 
 def process_file(src_path, category, mode):
-    """处理单个文件：生成 java 或 drawio。"""
+    """处理单个文件：生成 java 或 graphviz。"""
     rel = src_path.relative_to(DATA_DIR)
 
     if mode == "java":
         out_dir = JAVA_DIR
         out_ext = ".plsql.java"
-    elif mode == "drawio":
-        out_dir = DRAWIO_DIR
-        out_ext = ".plsql.drawio"
+    elif mode == "graphviz":
+        out_dir = GRAPHVIZ_DIR
+        out_ext = ".dot"
     else:
         out_dir = FLOW_DIR
-        out_ext = ".plsql.flow.drawio"
+        out_ext = ".flow.dot"
 
     out_path = out_dir / rel.with_suffix(out_ext)
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     java_mode = mode
-    if mode == "flowchart":
-        java_mode = "flowchart"
+    if mode == "flow-graphviz":
+        java_mode = "flow-graphviz"
 
     translate_sh = PROJECT_DIR / "plsql-translator-java" / "translate.sh"
     cmd = [str(translate_sh), "--mode", java_mode, str(src_path), str(out_path)]
@@ -117,7 +117,7 @@ def main():
     parser.add_argument("--max", type=int, default=None,
                         help="最多处理 N 个文件")
     parser.add_argument("--mode", default="both",
-                        choices=["java", "drawio", "flowchart", "both"],
+                        choices=["java", "graphviz", "flow-graphviz", "both"],
                         help="输出类型")
     parser.add_argument("--start-from", type=int, default=0,
                         help="从第 N 个文件开始（用于断点续传）")
@@ -129,7 +129,7 @@ def main():
         print("没有找到 PL/SQL 文件")
         return
 
-    modes_all = ["java", "drawio", "flowchart"]
+    modes_all = ["java", "graphviz", "flow-graphviz"]
     modes = modes_all if args.mode == "both" else [args.mode]
 
     print(f"找到 {total} 个 PL/SQL 文件，开始处理...")

@@ -14,7 +14,7 @@ FILES=(
   "PACKAGE_BODY/jabautista_GeniisysSCA/jabautista_GeniisysSCA__src__main__resources__sql__packages__p_uwreports.pkb:p_uwreports"
 )
 
-mkdir -p "$OUT/java" "$OUT/drawio"
+mkdir -p "$OUT/java" "$OUT/graphviz" "$OUT/flow-graphviz"
 
 for entry in "${FILES[@]}"; do
   path="${entry%%:*}"
@@ -34,12 +34,17 @@ for entry in "${FILES[@]}"; do
   java -cp "$ANTLR:$JAR" com.plsql.translator.Main --mode java \
     "$src" "$OUT/java/${name}.java" 2>&1 | tail -1
 
-  # drawio 图
-  echo -n "  Drawio: "
-  java -cp "$ANTLR:$JAR" com.plsql.translator.Main --mode drawio \
-    "$src" "$OUT/drawio/${name}.drawio" 2>&1 | tail -1
+  # Graphviz 语法树图
+  echo -n "  Graphviz: "
+  java -cp "$ANTLR:$JAR" com.plsql.translator.Main --mode graphviz \
+    "$src" "$OUT/graphviz/${name}.dot" 2>&1 | tail -1
+
+  # Graphviz 控制流图
+  echo -n "  Flow-Graphviz: "
+  java -cp "$ANTLR:$JAR" com.plsql.translator.Main --mode flow-graphviz \
+    "$src" "$OUT/flow-graphviz/${name}.flow.dot" 2>&1 | tail -1
 done
 
 echo ""
 echo "=== 产出 ==="
-ls -lhS "$OUT/java/" "$OUT/drawio/"
+ls -lhS "$OUT/java/" "$OUT/graphviz/" "$OUT/flow-graphviz/"

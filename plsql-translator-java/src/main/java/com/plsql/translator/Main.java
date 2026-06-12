@@ -6,15 +6,18 @@ import java.nio.file.*;
 /**
  * PL/SQL 工具 CLI — 统一入口。
  *
- * 支持三种输出模式:
- *   --mode java    将 PL/SQL 翻译为 Java 代码（默认）
- *   --mode json    输出 JSON AST
- *   --mode drawio  输出 draw.io 图文件
+ * 支持四种输出模式:
+ *   --mode java         将 PL/SQL 翻译为 Java 代码（默认）
+ *   --mode json         输出 JSON AST
+ *   --mode graphviz      输出 Graphviz DOT 语法树图
+ *   --mode flow-graphviz 输出 Graphviz DOT 控制流图
+ *   --mode call-graph    输出 Graphviz DOT 调用关系图
  *
  * 用法:
- *   translate.sh input.sql                  → Java 到 stdout
- *   translate.sh --mode drawio input.sql    → 生成 .drawio 文件
- *   translate.sh --mode json input.sql      → 生成 .json 文件
+ *   translate.sh input.sql                     → Java 到 stdout
+ *   translate.sh --mode graphviz input.sql     → 生成 .dot 文件
+ *   translate.sh --mode json input.sql         → 生成 .json 文件
+ *   translate.sh --mode call-graph input.sql   → 生成 .call.dot 文件
  */
 public class Main {
 
@@ -28,8 +31,8 @@ public class Main {
         }
 
         if (fileArg >= args.length) {
-            System.err.println("用法: ... [--mode java|json|drawio] <input.sql> [output]");
-            System.err.println("       echo 'code' | ... [--mode java|json|drawio|flowchart] - [output]");
+            System.err.println("用法: ... [--mode java|json|graphviz|flow-graphviz|call-graph] <input.sql> [output]");
+            System.err.println("       echo 'code' | ... [--mode java|json|graphviz|flow-graphviz|call-graph] - [output]");
             System.exit(1);
         }
 
@@ -48,11 +51,14 @@ public class Main {
             case "json":
                 handleJson(source, args, fileArg, inputPath);
                 break;
-            case "drawio":
-                handleDrawio(source, args, fileArg, inputPath);
+            case "graphviz":
+                handleGraphviz(source, args, fileArg, inputPath);
                 break;
-            case "flowchart":
-                handleFlowchart(source, args, fileArg, inputPath);
+            case "flow-graphviz":
+                handleFlowGraphviz(source, args, fileArg, inputPath);
+                break;
+            case "call-graph":
+                handleCallGraph(source, args, fileArg, inputPath);
                 break;
             default:
                 handleJava(source, args, fileArg, inputPath);
@@ -69,22 +75,31 @@ public class Main {
         System.out.println("✓ " + out);
     }
 
-    static void handleDrawio(String source, String[] args, int fileArg, String inputPath) throws Exception {
-        String drawio = PlSqlDrawioGenerator.plsqlToDrawio(source);
+    static void handleGraphviz(String source, String[] args, int fileArg, String inputPath) throws Exception {
+        String dot = PlSqlGraphvizGenerator.plsqlToGraphviz(source);
         String out = (args.length > fileArg + 1) ? args[fileArg + 1]
-                    : inputPath.equals("-") ? "output.drawio"
-                    : inputPath.replace(".sql", ".drawio");
-        Files.write(Paths.get(out), drawio.getBytes());
+                    : inputPath.equals("-") ? "output.dot"
+                    : inputPath.replace(".sql", ".dot");
+        Files.write(Paths.get(out), dot.getBytes());
         System.out.println("✓ " + out);
     }
 
-    static void handleFlowchart(String source, String[] args, int fileArg, String inputPath) throws Exception {
-        String drawio = PlSqlFlowchartGenerator.plsqlToFlowchart(source);
+    static void handleFlowGraphviz(String source, String[] args, int fileArg, String inputPath) throws Exception {
+        String dot = PlSqlFlowchartToGraphvizGenerator.plsqlToFlowchart(source);
         String out = (args.length > fileArg + 1) ? args[fileArg + 1]
-                    : inputPath.equals("-") ? "output.flow.drawio"
-                    : inputPath.replace(".sql", ".flow.drawio");
-        Files.write(Paths.get(out), drawio.getBytes());
+                    : inputPath.equals("-") ? "output.flow.dot"
+                    : inputPath.replace(".sql", ".flow.dot");
+        Files.write(Paths.get(out), dot.getBytes());
         System.out.println("OK: " + out);
+    }
+
+    static void handleCallGraph(String source, String[] args, int fileArg, String inputPath) throws Exception {
+        String dot = PlSqlCallGraphGenerator.plsqlToCallGraph(source);
+        String out = (args.length > fileArg + 1) ? args[fileArg + 1]
+                    : inputPath.equals("-") ? "output.call.dot"
+                    : inputPath.replace(".sql", ".call.dot");
+        Files.write(Paths.get(out), dot.getBytes());
+        System.out.println("✓ " + out);
     }
 
     static void handleJava(String source, String[] args, int fileArg, String inputPath) throws Exception {
