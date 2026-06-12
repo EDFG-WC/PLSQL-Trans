@@ -178,8 +178,20 @@ public class PlSqlFlowchartToGraphvizGenerator {
         if (stmts == null || stmts.isEmpty()) return null;
         String firstEntry = null;
         List<String> prevExits = new ArrayList<>();
-        for (ParseTree stmt : stmts) {
-            FlowResult r = processOneStatement(g, stmt);
+        for (int i = 0; i < stmts.size();) {
+            FlowResult r;
+            ParseTree stmt = stmts.get(i);
+            if (isBasicStatement(stmt)) {
+                List<ParseTree> block = new ArrayList<>();
+                while (i < stmts.size() && isBasicStatement(stmts.get(i))) {
+                    block.add(stmts.get(i));
+                    i++;
+                }
+                r = processBasicStatementBlock(g, block);
+            } else {
+                r = processOneStatement(g, stmt);
+                i++;
+            }
             if (r == null) continue;
             if (firstEntry == null) {
                 firstEntry = r.entryId;
@@ -272,7 +284,7 @@ public class PlSqlFlowchartToGraphvizGenerator {
         List<String> allExits = new ArrayList<>();
         for (FlowResult br : branchResults) allExits.addAll(br.exitIds);
         if (!allExits.isEmpty() && findChildByRule(node, "else_part", 0) == null) {
-            allExits.add(decisionId);
+            allExits.add(curDecisionId);
         }
         if (allExits.isEmpty()) {
             return new FlowResult(g, decisionId, decisionId);
@@ -343,6 +355,43 @@ public class PlSqlFlowchartToGraphvizGenerator {
         if (text.length() > 35) text = text.substring(0, 32) + "...";
         String nid = g.addNode(NodeType.PROCESS, text);
         return new FlowResult(g, nid, nid);
+    }
+
+    static FlowResult processBasicStatementBlock(FlowGraph g, List<ParseTree> nodes) {
+        if (nodes == null || nodes.isEmpty()) return null;
+        if (nodes.size() == 1) return processBasicStatement(g, nodes.get(0));
+        String first = cleanStatementText(getOriginalText(nodes.get(0)));
+        if (first.length() > 32) first = first.substring(0, 29) + "...";
+        String nid = g.addNode(NodeType.PROCESS, nodes.size() + " statements\n" + first);
+        return new FlowResult(g, nid, nid);
+    }
+
+    static boolean isBasicStatement(ParseTree node) {
+        ParseTree actual = unwrapStatementNode(node);
+        if (actual == null || actual instanceof TerminalNode) return false;
+        String ruleName = ruleNameOf(actual);
+        if (ruleName == null) return false;
+        return !ruleName.equals("if_statement")
+            && !ruleName.equals("loop_statement")
+            && !ruleName.equals("case_statement")
+            && !ruleName.equals("body")
+            && !ruleName.equals("block");
+    }
+
+    static ParseTree unwrapStatementNode(ParseTree node) {
+        ParseTree cur = node;
+        while (cur != null && !(cur instanceof TerminalNode)
+               && "statement".equals(ruleNameOf(cur)) && cur.getChildCount() > 0) {
+            cur = cur.getChild(0);
+        }
+        return cur;
+    }
+
+    static String ruleNameOf(ParseTree node) {
+        if (node == null || node instanceof TerminalNode) return null;
+        int ri = ((RuleContext) node).getRuleIndex();
+        if (ri < 0 || ri >= PlSqlParser.ruleNames.length) return null;
+        return PlSqlParser.ruleNames[ri];
     }
 
     // ── HELPER: tree traversal utilities ────────────────
@@ -662,6 +711,10 @@ public class PlSqlFlowchartToGraphvizGenerator {
         sb.append("digraph PlSqlFlowchart {\n");
         sb.append("  rankdir=TB;\n");
         sb.append("  splines=ortho;\n");           // ★ 正交线，更清晰
+        sb.append("  nodesep=0.55;\n");
+        sb.append("  ranksep=0.8;\n");
+        sb.append("  ordering=out;\n");
+        sb.append("  concentrate=true;\n");
         sb.append("  bgcolor=\"").append(C_BG).append("\";\n");
         sb.append("  node [fontsize=").append(FONT_SZ)
           .append(", fontcolor=\"").append(C_TEXT)
@@ -778,6 +831,22 @@ public class PlSqlFlowchartToGraphvizGenerator {
 
         sb.append("\n");
 
+        Map<Integer, List<String>> nodesByRank = new TreeMap<>();
+        for (FlowNode fn : g.nodes) {
+            if (excNodeIds.contains(fn.id) || loopBodyNodeIds.contains(fn.id)) continue;
+            Integer rank = ranks.get(fn.id);
+            String vid = idMap.get(fn.id);
+            if (rank == null || vid == null) continue;
+            nodesByRank.computeIfAbsent(rank, k -> new ArrayList<>()).add(vid);
+        }
+        for (List<String> sameRank : nodesByRank.values()) {
+            if (sameRank.size() < 2) continue;
+            sb.append("  { rank=same;");
+            for (String vid : sameRank) sb.append(" ").append(vid).append(";");
+            sb.append(" }\n");
+        }
+        if (!nodesByRank.isEmpty()) sb.append("\n");
+
         // ── Edges with port assignments (Pass 3) ──
         for (FlowEdge fe : g.edges) {
             String src = idMap.get(fe.fromId);
@@ -818,11 +887,18 @@ public class PlSqlFlowchartToGraphvizGenerator {
             sb.append("  ").append(src).append(":").append(tailPort)
               .append(" -> ").append(tgt).append(":").append(headPort);
 
+            List<String> attrs = new ArrayList<>();
             if (!fe.label.isEmpty()) {
-                sb.append(" [xlabel=\"").append(dotEsc(fe.label)).append("\"");
-                sb.append(" fontsize=").append(FONT_SZ_SM);
-                sb.append(" fontcolor=\"").append(C_EDGE).append("\"");
-                sb.append("]");
+                attrs.add("label=\"" + dotEsc(fe.label) + "\"");
+                attrs.add("fontsize=" + FONT_SZ_SM);
+                attrs.add("fontcolor=\"" + C_EDGE + "\"");
+            }
+            if (tgtNode != null && tgtNode.type == NodeType.LOOP_BOUNDARY
+                && srcNode != null && srcNode.type != NodeType.LOOP_BOUNDARY) {
+                attrs.add("constraint=false");
+            }
+            if (!attrs.isEmpty()) {
+                sb.append(" [").append(String.join(", ", attrs)).append("]");
             }
             sb.append(";\n");
         }
