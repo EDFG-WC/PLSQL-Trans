@@ -12,6 +12,7 @@ OUTPUT_JAR="$BUILD_DIR/plsql-translator.jar"
 
 JAVA="${JAVA_HOME:+$JAVA_HOME/bin/}java"
 JAVAC="${JAVA_HOME:+$JAVA_HOME/bin/}javac"
+JAR="${JAVA_HOME:+$JAVA_HOME/bin/}jar"
 
 echo "=== PL/SQL → Java 翻译器 构建 ==="
 
@@ -38,11 +39,13 @@ done
 echo "[3/4] 编译 Java 源码..."
 mkdir -p "$BUILD_DIR/classes"
 $JAVAC -cp "$ANTLR_JAR" \
+    -encoding UTF-8 \
     -d "$BUILD_DIR/classes" \
     -sourcepath "$GEN_DIR" \
     "$GEN_DIR/$PARSER_PKG/"*.java
 
 $JAVAC -cp "$ANTLR_JAR:$BUILD_DIR/classes" \
+    -encoding UTF-8 \
     -d "$BUILD_DIR/classes" \
     -sourcepath "$SRC_JAVA" \
     "$SRC_JAVA/com/plsql/translator/"*.java
@@ -51,7 +54,7 @@ $JAVAC -cp "$ANTLR_JAR:$BUILD_DIR/classes" \
 echo "[4/4] 打包 JAR..."
 cd "$BUILD_DIR/classes"
 echo "Main-Class: com.plsql.translator.Main" > "$BUILD_DIR/manifest.txt"
-jar cfm "$OUTPUT_JAR" "$BUILD_DIR/manifest.txt" .
+$JAR cfm "$OUTPUT_JAR" "$BUILD_DIR/manifest.txt" .
 
 # 创建运行脚本
 cat > "$SCRIPT_DIR/translate.sh" << 'RUN'
